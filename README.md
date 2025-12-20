@@ -27,3 +27,17 @@ Bash
 
 curl localhost:8080/metrics | grep hybrid_link_latency_ms
 Expected output: hybrid_link_latency_ms <value>
+
+## 🚀 Progress: Phase 2 Complete (Cloud Orchestration)
+
+The framework has moved from local simulation to a live Google Cloud environment.
+
+### Infrastructure & Deployment
+- **IaC:** Provisioned a **GKE Autopilot** cluster using **Terraform**, ensuring a hands-off, SRE-focused management layer.
+- **Artifact Management:** Established a secure private registry using **Google Artifact Registry** for image lifecycle management.
+- **Orchestration:** Implemented Kubernetes manifests with defined **Resource Requests/Limits** to ensure workload stability.
+
+### Live Cloud Verification
+The probe is currently running in `europe-west3` (Frankfurt). Verified via:
+```bash
+kubectl logs -l app=probe
