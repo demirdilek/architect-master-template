@@ -83,3 +83,17 @@ done
 * **Identity Federation:** Utilized OIDC via GKE Hub authority for native cross-cloud authentication.
 * **Provider Dependencies:** Resolved Terraform race conditions using `depends_on` blocks for OIDC issuer URLs.
 * **API Provisioning:** Managed GKE stabilization with custom Terraform timeouts (30m).
+---
+
+### 🛰️ Multi-Cloud Gateway & Agent Integration
+
+Today's focus was on establishing a secure communication channel between the Google Cloud Console and the remote clusters in AWS and Azure using the **GKE Connect Agent**.
+
+#### Key Technical Achievements:
+* **GKE Connect Agent Deployment:** Successfully deployed the agent pods into the `gke-connect` namespace on both AWS and Azure.
+* **Identity Handshake (OIDC):** Resolved connectivity issues by manually configuring the OpenID Connect (OIDC) issuer URLs, allowing Google to verify the identity of the external clusters.
+* **Connect Gateway Authorization:** Configured RBAC (Role-Based Access Control) to allow the Google Cloud Console to securely "tunnel" through the gateway to view cluster resources.
+
+#### Resolved Issues:
+* **Status "Agent unreachable":** Fixed by triggering a fresh membership registration with explicit public issuer URLs.
+* **SSL/Handshake Errors:** Resolved by enabling `oidc-issuer` on Azure AKS to allow Google's validation service to reach the metadata endpoint.
