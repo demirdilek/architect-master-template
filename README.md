@@ -1,43 +1,94 @@
-# gke-hybrid-autonomy
-A high-availability hybrid cloud framework orchestrating GKE Autopilot from an edge Ubuntu controller. Built with a focus on Site Reliability Engineering (SRE) principles, featuring SLO-based alerting, automated toil reduction, and eBPF-powered observability.
+# 🚀 GKE Hybrid Autonomy Framework
 
-# Progress: Phase 1 Complete (The Probe Agent)
-The core monitoring component is now implemented and containerized.
+A high-availability hybrid cloud framework orchestrating **GKE Autopilot** as the primary control hub, with **AWS EKS** and **Azure AKS** providing cross-cloud resilience. Built with SRE principles, featuring non-overlapping networking, OIDC identity federation, and automated infrastructure provisioning.
 
-Features:
-Go-based Probe: Measures real-time latency to target endpoints.
+---
 
-Prometheus Integration: Exposes standard Go metrics and custom latency gauges on :8080/metrics.
+## 🏗️ Multi-Cloud Fleet Architecture
+The "Reliability Trio" is distributed across Frankfurt-based data centers to ensure zero downtime and vendor independence.
 
-Containerized Workload: Uses a Multi-Stage Dockerfile to produce a minimal (~15MB) production-ready image.
+| Context | Provider | Region | Managed Service | Role |
+| :--- | :--- | :--- | :--- | :--- |
+| `gcp-main` | **Google Cloud** | europe-west3 | GKE Autopilot | Fleet Manager & Frontend |
+| `aws-worker` | **AWS** | eu-central-1 | EKS Auto Mode | Inventory & Analytics |
+| `azure-backup` | **Azure** | germanywestcentral | AKS (v6 Arch) | Disaster Recovery (DR) |
 
-Local Verification
-To run the probe agent locally using Docker:
+### 🌐 Networking Strategy (Non-Overlapping CIDRs)
+To ensure cross-cloud communication without routing conflicts, a strict CIDR plan was implemented:
 
-# 1. Build the image
-DOCKER_BUILDKIT=0 docker build -t probe-agent:v1 .
+| Cloud | Network Resource | CIDR Range | Role |
+| :--- | :--- | :--- | :--- |
+| **GCP** | VPC (Auto) | `10.128.0.0/20` | Primary Orchestration |
+| **AWS** | VPC (Manual) | `10.2.0.0/16` | Data & Processing |
+| **Azure** | VNet (Manual) | `10.3.0.0/16` | Emergency Failover |
 
-# 2. Run the container
-docker run -p 8080:8080 probe-agent:v1
+---
 
-Verification (SRE Proof)
-Once the container is running, verify the metrics stream using curl:
+## 🛠️ Critical Troubleshooting & SRE Solutions
+
+### 1. AWS EKS: Identity Access Management (IAM)
+**Issue:** `kubectl` returns "Must be logged in" despite active CLI session.  
+**Root Cause:** EKS Access Entries must be explicitly mapped to IAM principals.  
+**Warning:** AWS is extremely strict regarding the Policy ARN format. You must use the **`eks`** prefix, not the standard `iam` prefix.
+
+**The Fix:**
+```bash
+# Register the IAM user in the EKS Access Entry system
+aws eks create-access-entry \
+    --cluster-name eks-frankfurt-worker \
+    --principal-arn arn:aws:iam::509452097369:user/terraform-manager \
+    --region eu-central-1 \
+    --type STANDARD
+
+# Associate the Admin Policy (Note the specific EKS-prefix ARN!)
+aws eks associate-access-policy \
+    --cluster-name eks-frankfurt-worker \
+    --principal-arn arn:aws:iam::509452097369:user/terraform-manager \
+    --region eu-central-1 \
+    --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy \
+    --access-scope type=cluster
+2. Azure: Resource Quota & SKU Audit
+Issue: Provisioning failed for Standard_DS2_v2 in germanywestcentral.
+
+Solution: Migrated to Standard_D2s_v6 architecture after a regional SKU audit via CLI to ensure compatibility with new subscription constraints.
+
+3. Local Environment: Xubuntu (XFCE) Fix
+Issue: Desktop content "shifts" or follows the mouse cursor (Viewport Panning).
+
+Cause: Accidental trigger of Alt + Mouse Scroll (XFCE Desktop Zoom).
+
+Fix: Use Alt + Scroll Down to reset. Permanent fix: Disable Zoom in Settings -> Window Manager -> Keyboard.
+
+🚀 Fleet Operations
+To verify the health of all three clusters simultaneously:
 
 Bash
 
-curl localhost:8080/metrics | grep hybrid_link_latency_ms
-Expected output: hybrid_link_latency_ms <value>
+for ctx in gcp-main aws-worker azure-backup; do 
+  echo "--- 🚀 Cluster: $ctx ---"
+  kubectl --context=$ctx get nodes
+  echo ""
+done
+📈 Implementation History
+Phase 1: The Probe Agent (Local)
+Developed a Go-based Probe for real-time latency monitoring.
 
-## 🚀 Progress: Phase 2 Complete (Cloud Orchestration)
+Exposed metrics on :8080/metrics for Prometheus integration.
 
-The framework has moved from local simulation to a live Google Cloud environment.
+Containerized using a multi-stage Dockerfile (~15MB image).
 
-### Infrastructure & Deployment
-- **IaC:** Provisioned a **GKE Autopilot** cluster using **Terraform**, ensuring a hands-off, SRE-focused management layer.
-- **Artifact Management:** Established a secure private registry using **Google Artifact Registry** for image lifecycle management.
-- **Orchestration:** Implemented Kubernetes manifests with defined **Resource Requests/Limits** to ensure workload stability.
+Phase 2: Cloud Orchestration (GCP)
+Provisioned GKE Autopilot via Terraform.
 
-### Live Cloud Verification
-The probe is currently running in `europe-west3` (Frankfurt). Verified via:
-```bash
-kubectl logs -l app=probe
+Established secure Artifact Registry for private image hosting.
+
+Verified workload stability via kubectl logs -l app=probe.
+
+Phase 3: Multi-Cloud Expansion
+Identity Federation: Utilized OIDC via GKE Hub authority to allow AWS/Azure clusters to authenticate with Google Cloud natively.
+
+Provider Dependencies: Resolved Terraform race conditions using depends_on blocks for OIDC issuer URLs.
+
+API Provisioning: Managed GKE control plane stabilization with custom Terraform timeouts (30m).
+
+API Provisioning: Managed GKE control plane stabilization with custom Terraform timeouts (30m).

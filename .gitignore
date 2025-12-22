@@ -1,3 +1,23 @@
+# AWS CLI / SDK Müll
+terraform/modules/aws/
+**/dist/
+**/*.so
+**/*.pem
+**/*.json
+
+# Terraform Junk (The 8000+ files are here)
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# Go Binaries
+probe-agent
+bin/
+
+# Hidden System Files
+.DS_Store
+.env
 # Local .terraform directories
 .terraform/
 
