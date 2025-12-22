@@ -24,16 +24,14 @@ To ensure cross-cloud communication without routing conflicts, a strict CIDR pla
 
 ---
 
-## 🛠️ Critical Troubleshooting & SRE Solutions
+### 🛠️ Critical Troubleshooting & Fixes
 
-### 1. AWS EKS: Identity Access Management (IAM)
-**Issue:** `kubectl` returns "Must be logged in" despite active CLI session.  
-**Root Cause:** EKS Access Entries must be explicitly mapped to IAM principals.  
-**Warning:** AWS is extremely strict regarding the Policy ARN format. You must use the **`eks`** prefix, not the standard `iam` prefix.
+#### 1. AWS EKS: Identity Access Management (IAM)
+**Issue:** `kubectl` returned authentication errors despite active AWS CLI sessions.
+**The Fix:** Registered the IAM user in the EKS Access Entry system and associated the correct Admin Policy. Note the specific `eks` prefix required for the ARN.
 
-**The Fix:**
 ```bash
-# Register the IAM user in the EKS Access Entry system
+# Register the IAM user
 aws eks create-access-entry \
     --cluster-name eks-frankfurt-worker \
     --principal-arn arn:aws:iam::509452097369:user/terraform-manager \
@@ -47,48 +45,41 @@ aws eks associate-access-policy \
     --region eu-central-1 \
     --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy \
     --access-scope type=cluster
+```
 2. Azure: Resource Quota & SKU Audit
 Issue: Provisioning failed for Standard_DS2_v2 in germanywestcentral.
 
-Solution: Migrated to Standard_D2s_v6 architecture after a regional SKU audit via CLI to ensure compatibility with new subscription constraints.
+Solution: Performed a CLI-based SKU audit and migrated to the Standard_D2s_v6 architecture to comply with regional subscription constraints.
 
 3. Local Environment: Xubuntu (XFCE) Fix
 Issue: Desktop content "shifts" or follows the mouse cursor (Viewport Panning).
 
-Cause: Accidental trigger of Alt + Mouse Scroll (XFCE Desktop Zoom).
+Cause: Accidental trigger of Alt + Mouse Scroll (XFCE Zoom).
 
-Fix: Use Alt + Scroll Down to reset. Permanent fix: Disable Zoom in Settings -> Window Manager -> Keyboard.
+Fix: Used Alt + Scroll Down to reset. Permanent fix: Disabled Zoom in Settings -> Window Manager -> Keyboard.
 
 🚀 Fleet Operations
 To verify the health of all three clusters simultaneously:
-
-Bash
-
+```bash
 for ctx in gcp-main aws-worker azure-backup; do 
   echo "--- 🚀 Cluster: $ctx ---"
   kubectl --context=$ctx get nodes
   echo ""
 done
-📈 Implementation History
-Phase 1: The Probe Agent (Local)
-Developed a Go-based Probe for real-time latency monitoring.
+```
+## 📈 Implementation History
 
-Exposed metrics on :8080/metrics for Prometheus integration.
+### Phase 1: The Probe Agent (Local)
+* **Real-time Monitoring:** Developed a Go-based Probe for latency tracking.
+* **Metrics:** Exposed metrics on `:8080/metrics` for Prometheus integration.
+* **Optimization:** Containerized using a multi-stage Dockerfile (~15MB image).
 
-Containerized using a multi-stage Dockerfile (~15MB image).
+### Phase 2: Cloud Orchestration (GCP)
+* **Provisioning:** Deployed GKE Autopilot via Terraform for zero-ops management.
+* **Storage:** Established secure Artifact Registry for private image hosting.
+* **Validation:** Verified workload stability via `kubectl logs -l app=probe`.
 
-Phase 2: Cloud Orchestration (GCP)
-Provisioned GKE Autopilot via Terraform.
-
-Established secure Artifact Registry for private image hosting.
-
-Verified workload stability via kubectl logs -l app=probe.
-
-Phase 3: Multi-Cloud Expansion
-Identity Federation: Utilized OIDC via GKE Hub authority to allow AWS/Azure clusters to authenticate with Google Cloud natively.
-
-Provider Dependencies: Resolved Terraform race conditions using depends_on blocks for OIDC issuer URLs.
-
-API Provisioning: Managed GKE control plane stabilization with custom Terraform timeouts (30m).
-
-
+### Phase 3: Multi-Cloud Expansion
+* **Identity Federation:** Utilized OIDC via GKE Hub authority for native cross-cloud authentication.
+* **Provider Dependencies:** Resolved Terraform race conditions using `depends_on` blocks for OIDC issuer URLs.
+* **API Provisioning:** Managed GKE stabilization with custom Terraform timeouts (30m).
