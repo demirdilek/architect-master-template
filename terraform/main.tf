@@ -72,7 +72,7 @@ module "eks" {
 
   cluster_name    = "eks-frankfurt-worker"
   cluster_version = "1.31"
-
+  cluster_endpoint_public_access = true
   vpc_id     = module.vpc_aws.vpc_id
   subnet_ids = module.vpc_aws.private_subnets 
 
