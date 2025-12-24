@@ -46,7 +46,7 @@ aws eks associate-access-policy \
     --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy \
     --access-scope type=cluster
 ```
-2. Azure: Resource Quota & SKU Audit
+#### 2. Azure: Resource Quota & SKU Audit
 Issue: Provisioning failed for Standard_DS2_v2 in germanywestcentral.
 
 Solution: Performed a CLI-based SKU audit and migrated to the Standard_D2s_v6 architecture to comply with regional subscription constraints.
