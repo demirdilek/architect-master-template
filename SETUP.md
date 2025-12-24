@@ -22,7 +22,9 @@ nvidia-drm.modeset=1 : Enables framebuffer synchronization.
 
 i915.enable_psr=0 : Disables Panel Self Refresh (fixes black screen bugs on HP hardware).
 
-Configuration: GRUB_CMDLINE_LINUX_DEFAULT="quiet splash nvidia-drm.modeset=1 i915.enable_psr=0"
+mem_sleep_default=deep : Forces the system into deep sleep (S3) instead of s2idle, which prevents wake-up failures on NVIDIA hardware.
+
+Configuration: GRUB_CMDLINE_LINUX_DEFAULT="quiet splash nvidia-drm.modeset=1 i915.enable_psr=0 mem_sleep_default=deep"
 
 Afterwards, run sudo update-grub.
 
