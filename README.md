@@ -51,13 +51,6 @@ Issue: Provisioning failed for Standard_DS2_v2 in germanywestcentral.
 
 Solution: Performed a CLI-based SKU audit and migrated to the Standard_D2s_v6 architecture to comply with regional subscription constraints.
 
-3. Local Environment: Xubuntu (XFCE) Fix
-Issue: Desktop content "shifts" or follows the mouse cursor (Viewport Panning).
-
-Cause: Accidental trigger of Alt + Mouse Scroll (XFCE Zoom).
-
-Fix: Used Alt + Scroll Down to reset. Permanent fix: Disabled Zoom in Settings -> Window Manager -> Keyboard.
-
 🚀 Fleet Operations
 To verify the health of all three clusters simultaneously:
 ```bash
