@@ -1,6 +1,5 @@
 # ==================================================================================
 # 1. NETWORKS (Connectivity Layer)
-# Designed for low cost: No NAT Gateways, using Public IPs for outbound traffic.
 # ==================================================================================
 
 # GCP: Standard VPC in auto-mode
@@ -9,7 +8,7 @@ resource "google_compute_network" "gcp_vpc" {
   auto_create_subnetworks = true
 }
 
-# AWS: Cost-optimized VPC (No NAT Gateway saved ~$32/month)
+# AWS: Cost-optimized VPC (No NAT Gateway)
 module "vpc_aws" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "~> 5.0"
@@ -17,10 +16,9 @@ module "vpc_aws" {
   cidr    = "10.2.0.0/16"
   azs     = ["eu-central-1a", "eu-central-1b"]
 
-  # Nodes in public subnets can reach Google APIs directly via Public IPs
   public_subnets = ["10.2.101.0/24", "10.2.102.0/24"]
-
-  enable_nat_gateway      = false 
+  
+  enable_nat_gateway     = false 
   map_public_ip_on_launch = true
 }
 
@@ -46,7 +44,6 @@ resource "azurerm_subnet" "aks_subnet" {
 
 # ==================================================================================
 # 2. KUBERNETES CLUSTERS (Compute Layer)
-# Using Spot instances and B-series VMs to satisfy budget and quota limits.
 # ==================================================================================
 
 # GKE (GCP): Autopilot Brain
@@ -63,30 +60,35 @@ resource "google_container_cluster" "gcp_hybrid_brain" {
   fleet { project = "gke-hybrid-autonomy" }
 }
 
-# EKS (AWS): Worker cluster using Spot instances
+# EKS (AWS): Worker cluster with Modern Access Entry API
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 20.0"
+
   cluster_name    = "eks-frankfurt-worker"
-  cluster_version = "1.31"
+  cluster_version = "1.34"
+  
   cluster_endpoint_public_access = true
   vpc_id     = module.vpc_aws.vpc_id
   subnet_ids = module.vpc_aws.public_subnets 
-  cluster_enabled_log_types = []
-  bootstrap_self_managed_addons = false 
 
+  # NEW: Modern Authentication for v1.31+
+  authentication_mode = "API_AND_CONFIG_MAP"
+  enable_cluster_creator_admin_permissions = true
+
+  # Updated argument name for v20.0 module
   eks_managed_node_groups = {
     spot_nodes = {
-      instance_types = ["t3.small"] # Free-tier eligible
+      instance_types = ["t3.small"]
       capacity_type  = "SPOT"
-      min_size     = 1
-      max_size     = 1
-      desired_size = 1
+      min_size       = 1
+      max_size       = 1
+      desired_size   = 1
     }
   }
 }
 
-# AKS (Azure): Backup cluster
+# AKS (Azure): Backup cluster with Entra ID Integration
 resource "azurerm_kubernetes_cluster" "azure_hybrid_backup" {
   name                = "aks-frankfurt-backup"
   location            = azurerm_resource_group.rg.location
@@ -94,17 +96,23 @@ resource "azurerm_kubernetes_cluster" "azure_hybrid_backup" {
   dns_prefix          = "hybrid-aks"
   sku_tier            = "Free" 
 
+  # NEW: Azure RBAC Integration
+  azure_active_directory_role_based_access_control {
+    managed                = true
+    azure_rbac_enabled     = true
+  }
+
   default_node_pool {
     name                = "systempool"
     node_count          = 1
-    vm_size             = "Standard_D2s_v6" # 4GB RAM to satisfy quota and memory requirements
+    vm_size             = "Standard_D2s_v6"
     vnet_subnet_id      = azurerm_subnet.aks_subnet.id
     type                = "VirtualMachineScaleSets"
   }
   identity { type = "SystemAssigned" }
 }
 
-# Azure Spot Pool for the GKE Connect Agent
+# Azure Spot Pool
 resource "azurerm_kubernetes_cluster_node_pool" "spot_workload" {
   name                  = "spotp"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.azure_hybrid_backup.id
@@ -119,28 +127,40 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot_workload" {
 
 # ==================================================================================
 # 3. GKE HUB (Fleet Registration)
-# Linking external clusters to the Google Cloud Dashboard.
 # ==================================================================================
 
 resource "google_gke_hub_membership" "aws_fleet_member" {
   membership_id = "aws-worker-membership"
   location      = "global"
-  authority { issuer = module.eks.cluster_oidc_issuer_url }
+  authority {
+    issuer = module.eks.cluster_oidc_issuer_url
+  }
   endpoint {}
-  depends_on = [module.eks]
 }
 
 resource "google_gke_hub_membership" "azure_fleet_member" {
   membership_id = "azure-backup-membership"
   location      = "global"
-  authority { issuer = azurerm_kubernetes_cluster.azure_hybrid_backup.oidc_issuer_url }
+  authority {
+    issuer = azurerm_kubernetes_cluster.azure_hybrid_backup.oidc_issuer_url
+  }
   endpoint {}
-  depends_on = [azurerm_kubernetes_cluster.azure_hybrid_backup]
 }
 
 # ==================================================================================
-# 4. KUBERNETES & HELM AUTHENTICATION
-# Aliased providers to connect to multiple clusters simultaneously.
+# 4. RBAC ASSIGNMENTS (Azure specific)
+# ==================================================================================
+
+resource "azurerm_role_assignment" "aks_admin" {
+  scope                = azurerm_kubernetes_cluster.azure_hybrid_backup.id
+  role_definition_name = "Azure Kubernetes Service Cluster Admin Role"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
+data "azurerm_client_config" "current" {}
+
+# ==================================================================================
+# 5. KUBERNETES PROVIDERS (Multi-Cluster Auth)
 # ==================================================================================
 
 provider "kubernetes" {
@@ -154,19 +174,6 @@ provider "kubernetes" {
   }
 }
 
-provider "helm" {
-  alias = "eks"
-  kubernetes {
-    host                   = module.eks.cluster_endpoint
-    cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
-    exec {
-      api_version = "client.authentication.k8s.io/v1beta1"
-      command     = "aws"
-      args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
-    }
-  }
-}
-
 provider "kubernetes" {
   alias                  = "aks"
   host                   = azurerm_kubernetes_cluster.azure_hybrid_backup.kube_config.0.host
@@ -174,63 +181,3 @@ provider "kubernetes" {
   client_key             = base64decode(azurerm_kubernetes_cluster.azure_hybrid_backup.kube_config.0.client_key)
   cluster_ca_certificate = base64decode(azurerm_kubernetes_cluster.azure_hybrid_backup.kube_config.0.cluster_ca_certificate)
 }
-
-provider "helm" {
-  alias = "aks"
-  kubernetes {
-    host                   = azurerm_kubernetes_cluster.azure_hybrid_backup.kube_config.0.host
-    client_certificate     = base64decode(azurerm_kubernetes_cluster.azure_hybrid_backup.kube_config.0.client_certificate)
-    client_key             = base64decode(azurerm_kubernetes_cluster.azure_hybrid_backup.kube_config.0.client_key)
-    cluster_ca_certificate = base64decode(azurerm_kubernetes_cluster.azure_hybrid_backup.kube_config.0.cluster_ca_certificate)
-  }
-}
-
-# ==================================================================================
-# 5. AGENT DEPLOYMENT (Using OCI Helm Charts)
-# ==================================================================================
-/*
-resource "helm_release" "gke_connect_aws" {
-  provider         = helm.eks
-  name             = "gke-connect"
-  repository       = "https://charts.companyinfo.dev"
-  chart            = "gke-connect-agent"
-  version          = "0.1.0"
-  namespace        = "gke-connect"
-  create_namespace = true
-
-  set {
-    name  = "projectID"
-    value = "gke-hybrid-autonomy"
-  }
-  set {
-    name  = "membershipID"
-    value = google_gke_hub_membership.aws_fleet_member.membership_id
-  }
-  set {
-    name  = "logLevel"
-    value = "error"
-  }
-}
-
-resource "helm_release" "gke_connect_azure" {
-  provider         = helm.aks
-  name             = "gke-connect"
-  repository       = "https://charts.companyinfo.dev"
-  chart            = "gke-connect-agent"
-  version          = "0.1.0"
-  namespace        = "gke-connect"
-  create_namespace = true
-
-  set {
-    name  = "projectID"
-    value = "gke-hybrid-autonomy"
-  }
-  set {
-    name  = "membershipID"
-    value = google_gke_hub_membership.azure_fleet_member.membership_id
-  }
-  set {
-    name  = "logLevel"
-    value = "error"
-  }
-}*/
