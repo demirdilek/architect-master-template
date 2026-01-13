@@ -1,32 +1,5 @@
-# --- Terraform ---
+venv/
+.env
 .terraform/
-terraform/.terraform/
 *.tfstate
 *.tfstate.backup
-*.tfvars
-*.tfvars.json
-.terraform.lock.hcl
-
-# --- AWS & Binary Junk (Der Übeltäter) ---
-terraform/modules/aws/
-**/dist/
-**/*.so
-**/*.pem
-**/*.json
-aws/
-.aws/
-
-# --- Go / Development ---
-bin/
-probe-agent
-go.sum
-*.exe
-*.dll
-
-# --- System / IDE ---
-.DS_Store
-.idea/
-.vscode/
-*.swp
-*.log
-.env
