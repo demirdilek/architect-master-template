@@ -1,0 +1,39 @@
+name: Multi-Platform Docker Build
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Wichtig für Multi-Arch: QEMU emuliert die fremden Architekturen
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      # Erstellt den speziellen Buildx-Builder
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Der eigentliche Build-Prozess für beide Plattformen
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: dein-benutzer/deine-app:latest
+          # Cache optimiert die Geschwindigkeit bei Folge-Builds
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          
